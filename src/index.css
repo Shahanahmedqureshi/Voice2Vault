@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root {
+  --bg-page: #F6F4EF;
+  --bg-panel: #FFFFFF;
+  --bg-subtle: #FBFAF7;
+  --border-default: #E4E0D6;
+  --border-strong: #CFC9BC;
+  --text-primary: #1F2328;
+  --text-secondary: #5B6168;
+  --text-tertiary: #8A8F96;
+  --accent: #234E7D;
+  --accent-hover: #1B4068;
+  --accent-tint: #E8EFF7;
+  --status-success: #2F6B3F;
+  --status-success-tint: #E7F1EA;
+  --status-warning: #9A5B00;
+  --status-warning-tint: #FBF0DC;
+  --status-danger: #A7321F;
+  --status-danger-tint: #FAE8E4;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #F6F4EF;
+  color: #1F2328;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Panel styling per specification */
+.panel {
+  background-color: #FFFFFF;
+  border: 1px solid #E4E0D6;
+  border-radius: 8px;
+}
+
+/* Inputs, buttons, controls */
+input, textarea, select {
+  font-family: var(--font-sans);
+  border-radius: 6px;
+  border: 1px solid #E4E0D6;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #234E7D;
+  box-shadow: 0 0 0 2px #E8EFF7;
+}
+
+/* Tabular figures for alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Clean scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CFC9BC;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8A8F96;
+}
