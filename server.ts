@@ -317,7 +317,7 @@ Return STRICT JSON matching this schema:
 }`;
 
   if (ai && userPrompt) {
-    const modelsToTry = ['gemma-4-26b-a4b-it', 'gemini-3.8-flash'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.8-flash'];
     for (const model of modelsToTry) {
       try {
         const response = await ai.models.generateContent({
@@ -335,15 +335,21 @@ Return STRICT JSON matching this schema:
           return res.json({ success: true, engine: model, plan });
         }
       } catch (err: any) {
+        const isQuota = err?.status === 'RESOURCE_EXHAUSTED' || err?.code === 429 || /quota/i.test(err?.message || '');
         console.warn(`Planner model ${model} attempt:`, err?.message || err);
+        if (isQuota) {
+          // Immediately break to avoid slow sequential rate-limit stalls
+          break;
+        }
       }
     }
   }
 
-  // Graceful fallback plan
+  // Graceful fallback plan for instant zero-delay execution
   res.json({
     success: true,
     engine: 'local-planner-fallback',
+    rateLimited: true,
     plan: null,
   });
 });
@@ -548,8 +554,8 @@ Return STRICT JSON matching this schema:
 }`;
 
     const modelsToTry = (isImage || isAudio)
-      ? ['gemini-3.8-flash']
-      : ['gemma-4-26b-a4b-it', 'gemini-3.8-flash'];
+      ? ['gemini-2.5-flash', 'gemini-3.8-flash']
+      : ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.8-flash'];
 
     for (const model of modelsToTry) {
       try {
@@ -604,7 +610,9 @@ Return STRICT JSON matching this schema:
 
         return res.json({ success: true, engine: model, data: parsed });
       } catch (err: any) {
+        const isQuota = err?.status === 'RESOURCE_EXHAUSTED' || err?.code === 429 || /quota/i.test(err?.message || '');
         console.warn(`Intake model ${model} attempt failed:`, err?.message || err);
+        if (isQuota) break;
       }
     }
   }

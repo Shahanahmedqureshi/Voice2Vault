@@ -5,12 +5,14 @@ import { db } from '../store/db';
 interface CommandPanelProps {
   onSubmitRequest: (text: string, imageBase64?: string, audioBase64?: string) => Promise<void>;
   isBusy: boolean;
+  isPlanning?: boolean;
   onRunDemoScenario: (scenarioIndex: number) => void;
 }
 
 export const CommandPanel: React.FC<CommandPanelProps> = ({
   onSubmitRequest,
   isBusy,
+  isPlanning = false,
   onRunDemoScenario,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -22,6 +24,10 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
   const [rawTranscript, setRawTranscript] = useState('');
   const [pendingVoiceText, setPendingVoiceText] = useState('');
   const [showVoiceConfirm, setShowVoiceConfirm] = useState(false);
+
+  // Loading & Submission State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingScenario, setLoadingScenario] = useState<number | null>(null);
 
   // Photo state
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
@@ -322,12 +328,29 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
     });
   };
 
-  // Form submit
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Form submit with immediate responsiveness
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!inputText.trim() && !attachedImage) return;
+    if (isBusy || isPlanning || isSubmitting) return;
 
-    await onSubmitRequest(inputText.trim(), attachedImage || undefined);
+    setIsSubmitting(true);
+    try {
+      await onSubmitRequest(inputText.trim(), attachedImage || undefined);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRunScenarioWithLoading = async (scenarioIndex: number, text?: string) => {
+    if (isBusy || isPlanning || isSubmitting || loadingScenario !== null) return;
+    if (text) setInputText(text);
+    setLoadingScenario(scenarioIndex);
+    try {
+      await onRunDemoScenario(scenarioIndex);
+    } finally {
+      setLoadingScenario(null);
+    }
   };
 
   const formatTimer = (sec: number) => {
@@ -564,8 +587,14 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
             rows={5}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
             placeholder="Type a request, record voice, or attach a kachha bill photo, e.g. Sharma Kirana pe 20 peti oil utaara, 42000 bill, 15000 mila, baaki 29000"
-            className="w-full p-2.5 text-[14px] bg-white border border-[#E4E0D6] rounded-[6px] text-[#1F2328] placeholder:text-[#8A8F96] focus:border-[#234E7D] resize-none leading-relaxed"
+            className="w-full p-2.5 text-[14px] bg-white border border-[#E4E0D6] rounded-[6px] text-[#1F2328] placeholder:text-[#8A8F96] focus:border-[#234E7D] resize-none leading-relaxed transition-colors"
           />
 
           {/* Attached image preview badge if present */}
@@ -592,20 +621,50 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
             </div>
           )}
 
-          {/* Action Row */}
-          <div className="flex items-center justify-end gap-2">
+          {/* Action Row with immediate interactive feedback */}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="text-[11px] text-[#8A8F96]">
+              {isPlanning || isSubmitting ? (
+                <span className="text-[#234E7D] font-medium flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin inline stroke-[2]" />
+                  Synthesizing agent pipeline...
+                </span>
+              ) : isBusy ? (
+                <span className="text-[#234E7D] font-medium flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin inline stroke-[2]" />
+                  Workforce executing tasks...
+                </span>
+              ) : (
+                <span>Press ⌘+Enter or click to execute</span>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={isBusy || (!inputText.trim() && !attachedImage)}
-              className="h-[36px] px-4 text-[14px] font-medium rounded-[6px] bg-[#234E7D] text-white hover:bg-[#1B4068] active:bg-[#163557] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 cursor-pointer"
+              disabled={isBusy || isPlanning || isSubmitting || (!inputText.trim() && !attachedImage)}
+              className="h-[36px] px-4 text-[14px] font-medium rounded-[6px] bg-[#234E7D] text-white hover:bg-[#1B4068] active:bg-[#163557] disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center gap-2 cursor-pointer shadow-none"
             >
-              {isBusy && <Loader2 className="w-4 h-4 animate-spin stroke-[1.5]" />}
-              <span>Plan and run</span>
+              {isPlanning || isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin stroke-[2]" />
+                  <span>Planning DAG...</span>
+                </>
+              ) : isBusy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin stroke-[2]" />
+                  <span>Executing...</span>
+                </>
+              ) : (
+                <>
+                  <span>Plan and run</span>
+                  <ArrowRight className="w-4 h-4 stroke-[1.5]" />
+                </>
+              )}
             </button>
           </div>
         </form>
 
-        {/* Demo scenarios section */}
+        {/* Demo scenarios section with individual spinners */}
         <div className="mt-2 pt-3 border-t border-[#E4E0D6] flex flex-col gap-2">
           <div className="text-[12px] font-medium text-[#5B6168]">Demo scenarios</div>
           <div className="flex flex-col divide-y divide-[#E4E0D6] border border-[#E4E0D6] rounded-[6px] overflow-hidden">
@@ -614,10 +673,9 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
               type="button"
               onClick={() => {
                 const text = 'Patel Hardware pe 50 box drill bits, 15000 bill, 12000 paid, 3000 due';
-                setInputText(text);
-                onRunDemoScenario(1);
+                handleRunScenarioWithLoading(1, text);
               }}
-              disabled={isBusy}
+              disabled={isBusy || isPlanning || isSubmitting || loadingScenario !== null}
               className="p-2.5 bg-white hover:bg-[#FBFAF7] text-left transition-colors flex items-start justify-between gap-3 cursor-pointer disabled:opacity-50"
             >
               <div>
@@ -626,9 +684,16 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
                   Patel Hardware pe 50 box drill bits, 15000 bill, 12000 paid, 3000 due
                 </div>
               </div>
-              <span className="text-[11px] text-[#5B6168] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
-                Clean match
-              </span>
+              {loadingScenario === 1 ? (
+                <span className="text-[11px] text-[#234E7D] bg-[#E8EFF7] px-1.5 py-0.5 rounded-[4px] shrink-0 font-medium flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin stroke-[2]" />
+                  <span>Starting...</span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#5B6168] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
+                  Clean match
+                </span>
+              )}
             </button>
 
             {/* Scenario 2: Amount mismatch */}
@@ -636,10 +701,9 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
               type="button"
               onClick={() => {
                 const text = 'Sharma Kirana pe 20 peti oil utaara, 42000 bill, 15000 mila, baaki 29000';
-                setInputText(text);
-                onRunDemoScenario(2);
+                handleRunScenarioWithLoading(2, text);
               }}
-              disabled={isBusy}
+              disabled={isBusy || isPlanning || isSubmitting || loadingScenario !== null}
               className="p-2.5 bg-white hover:bg-[#FBFAF7] text-left transition-colors flex items-start justify-between gap-3 cursor-pointer disabled:opacity-50"
             >
               <div>
@@ -648,16 +712,23 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
                   Sharma Kirana pe 20 peti oil utaara, 42000 bill, 15000 mila, baaki 29000
                 </div>
               </div>
-              <span className="text-[11px] text-[#9A5B00] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
-                Needs approval
-              </span>
+              {loadingScenario === 2 ? (
+                <span className="text-[11px] text-[#234E7D] bg-[#E8EFF7] px-1.5 py-0.5 rounded-[4px] shrink-0 font-medium flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin stroke-[2]" />
+                  <span>Starting...</span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#9A5B00] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
+                  Needs approval
+                </span>
+              )}
             </button>
 
             {/* Scenario 3: Failure and retry */}
             <button
               type="button"
-              onClick={() => onRunDemoScenario(3)}
-              disabled={isBusy}
+              onClick={() => handleRunScenarioWithLoading(3)}
+              disabled={isBusy || isPlanning || isSubmitting || loadingScenario !== null}
               className="p-2.5 bg-white hover:bg-[#FBFAF7] text-left transition-colors flex items-start justify-between gap-3 cursor-pointer disabled:opacity-50"
             >
               <div>
@@ -666,9 +737,16 @@ export const CommandPanel: React.FC<CommandPanelProps> = ({
                   Godown database write failure injected; retries with backoff
                 </div>
               </div>
-              <span className="text-[11px] text-[#5B6168] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
-                Failure and retry
-              </span>
+              {loadingScenario === 3 ? (
+                <span className="text-[11px] text-[#234E7D] bg-[#E8EFF7] px-1.5 py-0.5 rounded-[4px] shrink-0 font-medium flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin stroke-[2]" />
+                  <span>Starting...</span>
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#5B6168] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px] shrink-0 font-normal">
+                  Failure and retry
+                </span>
+              )}
             </button>
           </div>
         </div>

@@ -11,17 +11,23 @@ import { Task, TaskPlan, TaskStatus } from '../types/agent';
 
 interface LiveDagViewProps {
   plan: TaskPlan | null;
+  isPlanning?: boolean;
   onSelectTask?: (task: Task) => void;
 }
 
-export const LiveDagView: React.FC<LiveDagViewProps> = ({ plan, onSelectTask }) => {
+export const LiveDagView: React.FC<LiveDagViewProps> = ({ plan, isPlanning = false, onSelectTask }) => {
   return (
     <div className="bg-white border border-[#E4E0D6] rounded-[8px] flex flex-col h-full min-h-[460px]">
       {/* 48px Header row */}
       <div className="h-[48px] px-4 border-b border-[#E4E0D6] flex items-center justify-between">
         <h2 className="text-[16px] font-semibold text-[#1F2328]">Task plan</h2>
 
-        {plan && (
+        {isPlanning ? (
+          <div className="flex items-center gap-1.5 text-[12px] text-[#234E7D] font-medium bg-[#E8EFF7] px-2 py-0.5 rounded-[4px]">
+            <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[2]" />
+            <span>Planning DAG...</span>
+          </div>
+        ) : plan ? (
           <div className="flex items-center gap-2 text-[12px] text-[#5B6168]">
             {plan.isFallbackPlan && (
               <span className="text-[11px] text-[#9A5B00] bg-[#FBF0DC] border border-[#E4E0D6] px-1.5 py-0.5 rounded-[4px]">
@@ -30,12 +36,26 @@ export const LiveDagView: React.FC<LiveDagViewProps> = ({ plan, onSelectTask }) 
             )}
             <span>{plan.tasks.length} tasks</span>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Body */}
       <div className="p-4 flex-1 flex flex-col justify-start">
-        {!plan ? (
+        {isPlanning && !plan ? (
+          /* Active Planning State with animated pipeline */
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-10 h-10 rounded-full bg-[#E8EFF7] border border-[#234E7D]/20 flex items-center justify-center mb-3">
+              <Loader2 className="w-5 h-5 text-[#234E7D] animate-spin stroke-[2]" />
+            </div>
+            <p className="text-[14px] font-semibold text-[#1F2328]">Synthesizing agent pipeline...</p>
+            <p className="text-[12px] text-[#5B6168] mt-1 max-w-[280px]">
+              Analyzing natural request, validating entities, and setting up verification gates.
+            </p>
+            <div className="w-48 h-1.5 bg-[#E4E0D6] rounded-full overflow-hidden mt-4">
+              <div className="h-full bg-[#234E7D] rounded-full animate-pulse w-3/4" />
+            </div>
+          </div>
+        ) : !plan ? (
           /* Empty state: plain centered text, no icon */
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[280px]">
             <p className="text-[14px] font-medium text-[#1F2328]">No task is running.</p>

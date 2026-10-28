@@ -8,6 +8,7 @@ import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { SettingsModal } from './components/SettingsModal';
 import { UnitTestsModal } from './components/UnitTestsModal';
 import { VoucherDetailModal } from './components/VoucherDetailModal';
+import { ProblemStatementLanding } from './components/ProblemStatementLanding';
 import { supervisor } from './orchestrator/supervisor';
 import { planBusinessRequest } from './agents/plannerAgent';
 import { db } from './store/db';
@@ -42,6 +43,12 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUnitTestsOpen, setIsUnitTestsOpen] = useState(false);
   const [inspectedVoucher, setInspectedVoucher] = useState<Voucher | null>(null);
+
+  // Active View: 3D Problem Statement Landing vs Operational Workspace
+  const [activeView, setActiveView] = useState<'landing' | 'workspace'>('landing');
+
+  // Planning & Execution State
+  const [isPlanning, setIsPlanning] = useState(false);
 
   // Judge Mode Automation State
   const [isJudgeModeActive, setIsJudgeModeActive] = useState(false);
@@ -78,10 +85,14 @@ export default function App() {
     imageBase64?: string,
     audioBase64?: string
   ) => {
+    setActiveView('workspace');
+    setIsPlanning(true);
+    setIsExecuting(true);
     try {
       // 1. Planner Agent builds DAG
       const plan = await planBusinessRequest(text, imageBase64, audioBase64);
       setCurrentPlan(plan);
+      setIsPlanning(false);
 
       // 2. Supervisor initiates topological execution
       await supervisor.startPlan(plan, {
@@ -100,6 +111,9 @@ export default function App() {
     } catch (err: any) {
       console.error('Request execution error:', err);
       refreshState();
+    } finally {
+      setIsPlanning(false);
+      setIsExecuting(supervisor.isBusy());
     }
   };
 
@@ -201,106 +215,122 @@ export default function App() {
         judgeStep={judgeStep}
         onGlobalCommand={handleExecuteRequest}
         isExecuting={isExecuting}
+        activeView={activeView}
+        onToggleView={(view) => setActiveView(view)}
       />
 
-      {/* 2. Summary row (subtle fill #FBFAF7, 1px bottom border) with Recharts revenue trend */}
-      <MetricsStrip
-        metrics={metrics}
-        isExecuting={isExecuting}
-        activeTaskCount={activeTaskCount}
-        totalTaskCount={totalTaskCount}
-        pendingApprovalCount={pendingApprovalCount}
-        hasFailedTasks={hasFailedTasks}
-        vouchers={vouchers}
-        ledgerEntries={ledgerEntries}
-      />
-
-      {/* 3. Main content area (max-width 1440px, padding 24px) */}
-      <main className="flex-1 px-6 py-6 max-w-[1440px] w-full mx-auto flex flex-col gap-6">
-        {/* 3-column Grid (360px / flexible / 360px) */}
-        <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr_360px] lg:grid-cols-12 gap-6 items-start">
-          {/* Left panel: New request */}
-          <div className="xl:col-span-1 lg:col-span-4 w-full">
-            <CommandPanel
-              onSubmitRequest={handleExecuteRequest}
-              isBusy={isExecuting}
-              onRunDemoScenario={handleRunDemoScenario}
-            />
-          </div>
-
-          {/* Center panel: Task plan */}
-          <div className="xl:col-span-1 lg:col-span-4 w-full">
-            <LiveDagView
-              plan={currentPlan}
-              onSelectTask={(task: Task) => {
-                if (task.result?.voucher) {
-                  setInspectedVoucher(task.result.voucher);
-                } else if (task.agent === 'intake' && task.result?.items) {
-                  const draftVoucher: Voucher = {
-                    id: `v-draft-${Date.now()}`,
-                    voucherNumber: 'EXTRACTED-BILL',
-                    date: new Date().toISOString().split('T')[0],
-                    partyName: task.result.customer?.name || 'Customer Bill Note',
-                    partyBeat: task.result.customer?.beat || 'Indore Mandi Hub',
-                    partyGstin: task.result.customer?.gstin || '23AABCS1429B1Z5',
-                    totalAmount: task.result.totalBill || 0,
-                    paidAmount: task.result.paidAmount || 0,
-                    paymentMode: task.result.paymentMode || 'CASH',
-                    statedUdhaar: task.result.statedPending || 0,
-                    computedUdhaar: Math.max(0, (task.result.totalBill || 0) - (task.result.paidAmount || 0)),
-                    hasMathAnomaly: false,
-                    mathDiscrepancy: 0,
-                    anomalyDetails: {
-                      statedBalance: task.result.statedPending || 0,
-                      actualBalance: Math.max(0, (task.result.totalBill || 0) - (task.result.paidAmount || 0)),
-                      discrepancyCaught: 0,
-                      explanation: 'Extracted directly from multimodal bill intake.',
-                      riskClassification: 'CLEAN_SETTLEMENT',
-                    },
-                    dueDate: task.result.dueDate || '2026-11-05',
-                    items: task.result.items || [],
-                    creditRisk: {
-                      exposurePercent: 0,
-                      riskRating: 'LOW',
-                      badgeText: 'EXTRACTED INVOICE',
-                      cfoDirective: 'Extracted from bill image for forensic review.',
-                    },
-                    hinglishSummary: `${task.result.customer?.name || 'Customer'}: बिल से आइटम और गणना निकाली गई।`,
-                    whatsappParchiText: '',
-                  };
-                  setInspectedVoucher(draftVoucher);
-                } else {
-                  const allV = db.getVouchers();
-                  if (allV.length > 0) setInspectedVoucher(allV[0]);
-                }
-              }}
-            />
-          </div>
-
-          {/* Right panel: Activity & Approvals */}
-          <div className="xl:col-span-1 lg:col-span-4 w-full">
-            <TraceAndApprovalsPanel
-              approvals={approvals}
-              messages={messages}
-              auditLogs={auditLogs}
-              onResolveApproval={handleResolveApproval}
-            />
-          </div>
-        </div>
-
-        {/* 4. Bottom Row: Master ledger, Customers and risk, Inventory and rates, Outbox */}
-        <div className="w-full">
-          <WorkspaceTabs
+      {activeView === 'landing' ? (
+        <ProblemStatementLanding
+          onEnterWorkspace={() => setActiveView('workspace')}
+          onRunDemoScenario={async (idx) => {
+            setActiveView('workspace');
+            await handleRunDemoScenario(idx);
+          }}
+        />
+      ) : (
+        <>
+          {/* 2. Summary row (subtle fill #FBFAF7, 1px bottom border) with Recharts revenue trend */}
+          <MetricsStrip
+            metrics={metrics}
+            isExecuting={isExecuting}
+            activeTaskCount={activeTaskCount}
+            totalTaskCount={totalTaskCount}
+            pendingApprovalCount={pendingApprovalCount}
+            hasFailedTasks={hasFailedTasks}
             vouchers={vouchers}
             ledgerEntries={ledgerEntries}
-            customers={customers}
-            inventory={inventory}
-            priceList={priceList}
-            outbox={outbox}
-            onSelectVoucher={(v) => setInspectedVoucher(v)}
           />
-        </div>
-      </main>
+
+          {/* 3. Main content area (max-width 1440px, padding 24px) */}
+          <main className="flex-1 px-6 py-6 max-w-[1440px] w-full mx-auto flex flex-col gap-6">
+            {/* 3-column Grid (360px / flexible / 360px) */}
+            <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr_360px] lg:grid-cols-12 gap-6 items-start">
+              {/* Left panel: New request */}
+              <div className="xl:col-span-1 lg:col-span-4 w-full">
+                <CommandPanel
+                  onSubmitRequest={handleExecuteRequest}
+                  isBusy={isExecuting || isPlanning}
+                  isPlanning={isPlanning}
+                  onRunDemoScenario={handleRunDemoScenario}
+                />
+              </div>
+
+              {/* Center panel: Task plan */}
+              <div className="xl:col-span-1 lg:col-span-4 w-full">
+                <LiveDagView
+                  plan={currentPlan}
+                  isPlanning={isPlanning}
+                  onSelectTask={(task: Task) => {
+                    if (task.result?.voucher) {
+                      setInspectedVoucher(task.result.voucher);
+                    } else if (task.agent === 'intake' && task.result?.items) {
+                      const draftVoucher: Voucher = {
+                        id: `v-draft-${Date.now()}`,
+                        voucherNumber: 'EXTRACTED-BILL',
+                        date: new Date().toISOString().split('T')[0],
+                        partyName: task.result.customer?.name || 'Customer Bill Note',
+                        partyBeat: task.result.customer?.beat || 'Indore Mandi Hub',
+                        partyGstin: task.result.customer?.gstin || '23AABCS1429B1Z5',
+                        totalAmount: task.result.totalBill || 0,
+                        paidAmount: task.result.paidAmount || 0,
+                        paymentMode: task.result.paymentMode || 'CASH',
+                        statedUdhaar: task.result.statedPending || 0,
+                        computedUdhaar: Math.max(0, (task.result.totalBill || 0) - (task.result.paidAmount || 0)),
+                        hasMathAnomaly: false,
+                        mathDiscrepancy: 0,
+                        anomalyDetails: {
+                          statedBalance: task.result.statedPending || 0,
+                          actualBalance: Math.max(0, (task.result.totalBill || 0) - (task.result.paidAmount || 0)),
+                          discrepancyCaught: 0,
+                          explanation: 'Extracted directly from multimodal bill intake.',
+                          riskClassification: 'CLEAN_SETTLEMENT',
+                        },
+                        dueDate: task.result.dueDate || '2026-11-05',
+                        items: task.result.items || [],
+                        creditRisk: {
+                          exposurePercent: 0,
+                          riskRating: 'LOW',
+                          badgeText: 'EXTRACTED INVOICE',
+                          cfoDirective: 'Extracted from bill image for forensic review.',
+                        },
+                        hinglishSummary: `${task.result.customer?.name || 'Customer'}: बिल से आइटम और गणना निकाली गई।`,
+                        whatsappParchiText: '',
+                      };
+                      setInspectedVoucher(draftVoucher);
+                    } else {
+                      const allV = db.getVouchers();
+                      if (allV.length > 0) setInspectedVoucher(allV[0]);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Right panel: Activity & Approvals */}
+              <div className="xl:col-span-1 lg:col-span-4 w-full">
+                <TraceAndApprovalsPanel
+                  approvals={approvals}
+                  messages={messages}
+                  auditLogs={auditLogs}
+                  onResolveApproval={handleResolveApproval}
+                />
+              </div>
+            </div>
+
+            {/* 4. Bottom Row: Master ledger, Customers and risk, Inventory and rates, Outbox */}
+            <div className="w-full">
+              <WorkspaceTabs
+                vouchers={vouchers}
+                ledgerEntries={ledgerEntries}
+                customers={customers}
+                inventory={inventory}
+                priceList={priceList}
+                outbox={outbox}
+                onSelectVoucher={(v) => setInspectedVoucher(v)}
+              />
+            </div>
+          </main>
+        </>
+      )}
 
       {/* Modals */}
       <SettingsModal

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Settings, Play } from 'lucide-react';
+import { Search, Settings, Play, Loader2 } from 'lucide-react';
 
 interface HeaderBarProps {
   onOpenSettings: () => void;
@@ -9,6 +9,8 @@ interface HeaderBarProps {
   judgeStep: number;
   onGlobalCommand: (query: string) => void;
   isExecuting?: boolean;
+  activeView?: 'landing' | 'workspace';
+  onToggleView?: (view: 'landing' | 'workspace') => void;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -19,6 +21,8 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   judgeStep,
   onGlobalCommand,
   isExecuting,
+  activeView = 'workspace',
+  onToggleView,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -65,13 +69,44 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Type a request, e.g. Sharma Kirana pe 20 peti oil utaara..."
-              className="w-full pl-9 pr-3 py-1.5 text-[14px] bg-white border border-[#E4E0D6] rounded-[6px] text-[#1F2328] placeholder:text-[#8A8F96] focus:border-[#234E7D] focus:ring-1 focus:ring-[#E8EFF7] transition-all"
+              className="w-full pl-9 pr-9 py-1.5 text-[14px] bg-white border border-[#E4E0D6] rounded-[6px] text-[#1F2328] placeholder:text-[#8A8F96] focus:border-[#234E7D] focus:ring-1 focus:ring-[#E8EFF7] transition-all"
             />
+            {isExecuting && (
+              <Loader2 className="w-4 h-4 text-[#234E7D] animate-spin absolute right-3 pointer-events-none stroke-[2]" />
+            )}
           </form>
         </div>
 
-        {/* Right: Secondary "Run demo", Ghost "Activity", Settings */}
+        {/* Right: View Toggle, Secondary "Run demo", Ghost "Activity", Settings */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* View Toggle Segmented Control */}
+          {onToggleView && (
+            <div className="flex items-center bg-[#FBFAF7] border border-[#E4E0D6] rounded-[6px] p-0.5 text-[13px] mr-1">
+              <button
+                type="button"
+                onClick={() => onToggleView('landing')}
+                className={`px-2.5 py-1 rounded-[4px] font-medium transition-colors cursor-pointer ${
+                  activeView === 'landing'
+                    ? 'bg-white text-[#234E7D] shadow-xs'
+                    : 'text-[#5B6168] hover:text-[#1F2328]'
+                }`}
+              >
+                3D Problem
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleView('workspace')}
+                className={`px-2.5 py-1 rounded-[4px] font-medium transition-colors cursor-pointer ${
+                  activeView === 'workspace'
+                    ? 'bg-white text-[#234E7D] shadow-xs'
+                    : 'text-[#5B6168] hover:text-[#1F2328]'
+                }`}
+              >
+                Workspace
+              </button>
+            </div>
+          )}
+
           {/* Secondary button "Run demo" */}
           <button
             type="button"

@@ -211,6 +211,9 @@ export async function planBusinessRequest(
   }
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
     const res = await fetch('/api/planner', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -220,7 +223,9 @@ export async function planBusinessRequest(
         hasImage: Boolean(imageBase64),
         hasAudio: Boolean(audioBase64),
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (res.ok) {
       const data = await res.json();
